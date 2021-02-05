@@ -13,7 +13,7 @@ Provides support for the KORG nanoKONTROL2 MIDI-controller in FL Studio 20.7.3 a
 * Enters lightshow-mode when idle
 * Has many configurable options
 * Controls master + all 125 mixer tracks
-* Mixertracks are highlighted (user-set colors are still intact! *)
+* Mixertracks are highlighted
 * Solo/Mute buttons with status-lights
 * Can Prevent jumps in volume and pan on faders/knobs
 * Can select the active channel
@@ -23,5 +23,5 @@ Provides support for the KORG nanoKONTROL2 MIDI-controller in FL Studio 20.7.3 a
 * Can toggle the pianoroll on/off
 * Can create time-markers and jump between them
 * Can select/scroll patterns
-* Can zoom in/out horizontally/vertically
+* Can zoom the playlist in/out horizontally/vertically
 * Can change the current tempo
