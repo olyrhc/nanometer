@@ -1,7 +1,8 @@
 # nanometer
-An FL Studio Python-script for the KORG nanoKONTROL 2 MIDI-device.
-#### Written by Robin Calvin
-Provides support for the KORG nanoKONTROL2 MIDI-controller in FL Studio 20.7.3 and later.
+An FL Studio MIDI-script for the KORG nanoKONTROL 2 MIDI-device.
+#### by Robin Calvin
+The script is written in Python and uses FL Studios MIDI Scripting Device API.
+It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later to work.
 
 ### Key Features
 * Functioning peak-meter lights
