@@ -10,7 +10,7 @@ TransportChan = 14
 #	The MIDI channel used for the transport controls.
 #	This must match the "Transport Button MIDI Channel" in the Korg Kontrol Editor.
 
-SleepTimer  = 1
+SleepTimer  = 5
 #	The number of minutes before the script enters lightshow-mode. 
 #	Value can be between 0 (lightshow is disabled) to 300.
 
