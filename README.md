@@ -28,4 +28,4 @@ It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later t
 * Controls the horizontal/vertical zooming of the playlist
 * Controls the current tempo
 
-#### Please refer to the [wiki](/olyrhc/nanometer/wiki/) for more details
+#### Please refer to the [wiki](https://github.com/olyrhc/nanometer/wiki) for more details
