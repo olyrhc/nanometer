@@ -82,13 +82,7 @@ BracketedRange = True
 #	If set to True (Default), the mixer tracks controlled by the nanoKONTROL will
 #	have brackets added to their names. False will leave the names untouched.
 
-PickupValues = False
-#	True (Default) means volume/panning will remain unchanged until the
-#	fader/knob passes the last value it was set to. False disables this behaviour
-#	and will cause the volume/panning to jump to the value set by the fader/knob.
-
 TempoBase = 80
 #	This sets the min (bottom)-value of the tempo-knob in the Playlist control mode.
 #	The value can be between 10 and 397.
-
 

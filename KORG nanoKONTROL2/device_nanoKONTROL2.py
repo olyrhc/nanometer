@@ -14,7 +14,7 @@ import config
 
 
 def OnInit():
-	print("### nanometer script v1.0rc.1 by Robin Calvin (olyrhc) ###")
+	print("*** nanometer script v1.0 by Robin Calvin (olyrhc) ***")
 	global nm
 	global kn
 	nm = NanoMeter()
@@ -266,9 +266,10 @@ class NanoMeter():
 			self.maxedpeak = -50
 			silenttime = 0
 			self.clear = False
-			if config.Debug: print("Peaklight  reset")
-			if kn.current_mode == 0: kn.set_track_status()
-			elif kn.current_mode ==1: kn.channel_status()
+			if not config.PlayingOnly:
+				if config.Debug: print("Peaklight  reset")
+				if kn.current_mode == 0: kn.set_track_status()
+				elif kn.current_mode ==1: kn.channel_status()
 
 		if peak_L + peak_R > 0.032 and peak_L == peak_R:	# If peak is not in stereo, change L and R
 			if config.BigMeter: L = None
@@ -286,7 +287,7 @@ class NanoMeter():
 				last_R = 0	# ...and the same for the next Right light row
 
 		if self.statuslights_ready():
-			if wasplaying:
+			if wasplaying and not isPlaying():
 				self.set_light(8,1,0)	# Clear all the lights when playing stops
 				if kn.current_mode == 0: kn.set_track_status()
 				elif kn.current_mode ==1: kn.channel_status()
@@ -436,7 +437,7 @@ class NanoMeter():
 	#	Returns True if the SMR status-lights are ready, i.e. the lights are not busy with the peak meter
 		if config.PlayingOnly and not isPlaying(): return True
 		elif not config.PlayingOnly:
-			if getTrackPeaks(self.track,2) < 0.001: return True	
+			if getTrackPeaks(self.track,2) < 0.001: return True
 		return False
 
 
@@ -449,7 +450,7 @@ class Kontrol():
 		self.mixer_range = []
 		self.set_mixer_range(1)
 		self.repeat_event = {}		
-		self.defaultcolors = []
+		self.defaultcolors = {}
 		self.init_range = False
 		self.modes = self.get_modes(0)
 		self.current_mode = self.get_modes(1)
@@ -468,7 +469,8 @@ class Kontrol():
 		self.knobs = (11,12,13,14,15,16,17,18)		# Knobs cc codes
 		self.smr_btns = [i for i in range(19,43)]
 		self.faders = (43,44,45,46,47,48,49,50)	# Faders cc codes
-
+		if getVersion() >= 13: self.pickup = True
+		else: self.pickup = False
 
 	def smr(self,key):
 	#	Generates a list of numbers that match the CC codes for the S, M or R buttons
@@ -512,9 +514,7 @@ class Kontrol():
 		track = mixer_range[n]
 		volume = val / 127 - 0.003
 		current = getTrackVolume(track) * 127
-		if config.PickupValues:
-			if abs(current - val) < 3:	#	Prevent jump in volume
-				setTrackVolume(track,volume)
+		if self.pickup: setTrackVolume(track,volume,2)
 		else: setTrackVolume(track,volume)
 
 
@@ -527,9 +527,7 @@ class Kontrol():
 		pan = val / 127 * 2 - 1.008
 		pval = getTrackPan(track) * 64
 		current = round(pval + 64)
-		if config.PickupValues:
-			if abs(current - val) < 3:	#	Prevent jump in pan
-				setTrackPan(track,pan)
+		if self.pickup: setTrackPan(track,pan,2)
 		else: setTrackPan(track,pan)
 
 
@@ -644,12 +642,19 @@ class Kontrol():
 		umarked = -10261391
 		found_marked = False
 		mark_count = 0
-		default = self.defaultcolors
 		if config.StickyMaster: clear_idx = 1
 		else: clear_idx = 0
 
+		def  defaultColor(track):
+			if track in self.defaultcolors: color = self.defaultcolors[track]
+			else: color = umarked
+			return color
+
 		if not state:
-			self.defaultcolors = [getTrackColor(track) for track in mixer_range]
+			self.defaultcolors = {}
+			for track in mixer_range:
+				color = getTrackColor(track)
+				if color != umarked and color != marked: self.defaultcolors[track] = color
 			if config.StickyMaster: r1 = mixer_range[1]
 			else: r1 = mixer_range[0]
 			try: setTrackNumber(r1,1)
@@ -670,27 +675,21 @@ class Kontrol():
 				if config.Debug: print("marked tracks found:",mark_count)
 
 		elif state ==1:	# Reset all mixer colors
-			for idx, track in enumerate(mixer_range):
-				color = self.defaultcolors[idx]
+			for track in mixer_range:
+				color = defaultColor(track)
 				setTrackColor(track,color)
 
-		elif state == 2:	# Update colors for decreasing range
-			clear_track = mixer_range[-1] +1
-			setTrackColor(clear_track,default[-1])
-			default.pop(-1)
-			color = getTrackColor(mixer_range[clear_idx])
-			default.insert(clear_idx,color)
-			self.defaultcolors = default	# Update default colors
-			setTrackColor(mixer_range[clear_idx],marked)
-
-		elif state == 3:	# Update colors for inreasing range
-			clear_track = mixer_range[clear_idx] -1
-			setTrackColor(clear_track,default[clear_idx])
-			default.pop(0)
-			color = getTrackColor(mixer_range[-1])
-			default.append(color)
-			self.defaultcolors = default	# Update default colors 
-			setTrackColor(mixer_range[-1],marked)
+		elif state > 1:
+			if state == 2:	# Update colors for decreasing range
+				clear_track = mixer_range[-1] +1
+				mark_track = mixer_range[clear_idx]
+			if state == 3:	# Update colors for inreasing range
+				clear_track = mixer_range[clear_idx] -1
+				mark_track = mixer_range[-1]
+			setTrackColor(clear_track,defaultColor(clear_track))
+			color = getTrackColor(mark_track)
+			if color != umarked and color != marked: self.defaultcolors[mark_track] = color	# Store the default color
+			setTrackColor(mark_track,marked)
 
 
 	def clean_colors(self):
@@ -803,6 +802,8 @@ class Kontrol():
 		cc = MIDI_CONTROLCHANGE
 		chan = event.midiChan
 		smr_chan = config.MIDIChannel - 1
+		highlight = config.ColoredRange
+		brackets = config.BracketedRange
 		smr_lights = self.smr_btns
 		button = event.data1
 		vel = event.data2
@@ -823,11 +824,12 @@ class Kontrol():
 			else: mode = modes[0]
 			
 			if mode == 0:
-				if config.BracketedRange: self.rename_range(1)	# Add brackets to names
-				if config.ColoredRange: self.set_range_color()	# Set range colors
+				if brackets: self.rename_range(1)	# Add brackets to names
+				if highlight: self.set_range_color()	# Set range colors
 				if peaks < 0.01: self.set_track_status()
 			elif mode > 0 and 0 in modes:
-				if config.ColoredRange: self.set_range_color(1)	# Clear range colors
+				if highlight: self.set_range_color(1)	# Clear range colors
+				if brackets: self.rename_range(0)
 				if peaks < 0.01:
 					for light in smr_lights:	# Clear all lights
 						midiOutMsg(cc,smr_chan,light,0)
@@ -879,16 +881,12 @@ class Kontrol():
 		vel = event.data2
 		knobs = self.knobs
 		channel = selectedChannel()
-		settrack = False
 
 		if event.data1 == knobs[0]:	# First knob
 			current = getTargetFxTrack(channel)
 			track = vel - 1
 			if track > 125: track = 125
-			if config.PickupValues:
-				if abs(track - current) == 1: settrack = True
-			else: settrack = True
-			if settrack:
+			if abs(track - current) == 1:
 				setTrackNumber(track,1)
 				name = getTrackName(track)
 				linkTrackToChannel(0)		# linkTrackToChannel() messes up the track name... :(
@@ -970,11 +968,9 @@ class Kontrol():
 			pos = base + knobval - tempo
 			if t < 0 and pos < -1: catch = 4
 			elif t > 0 and pos > 1: catch = 4
-			if config.PickupValues:
-				if abs(base + knobval - tempo) < catch:
-					if t > 0 and tempo <= base+126: newtempo = 10
-					elif t < 0 and tempo >= base: newtempo = -10
-			else: newtempo = (base + knobval - tempo) * 10
+			if abs(base + knobval - tempo) < catch:
+				if t > 0 and tempo <= base+126: newtempo = 10
+				elif t < 0 and tempo >= base: newtempo = -10
 		
 		if newtempo:
 			if tempo == config.TempoBase and newtempo < 0: pass
@@ -1074,7 +1070,6 @@ class Kontrol():
 			if config.Debug: print("Pause mode deactivated")
 			reset()
 			return
-		
 
 
 	def get_modes(self,current):
@@ -1095,7 +1090,7 @@ def CheckConfig(config):
 	# errors which the user might not understand.
 
 	boolparams = ['PeakMeter','ReversePeak','BigMeter','Clipping','PlayingOnly','ArmedTracks','ExclusiveSelect','TrackRangeOnly','StickyMaster',
-	'ColoredRange','BracketedRange','PickupValues','SelectedPeak','MixerMode','ChannelrackMode','PlaylistMode']
+	'ColoredRange','BracketedRange','SelectedPeak','MixerMode','ChannelrackMode','PlaylistMode']
 	numparams = {'MIDIChannel': (1,16), 'TransportChan': (1,16),'SleepTimer': (0,300),'HighlightColor': (-15461356,-1),'TempoBase':(10,397)}
 
 	if not hasattr(config,'Debug'): config.Debug = False
