@@ -17,6 +17,7 @@ It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later t
 * Controls master + all 125 mixer tracks
 * Mixertracks are highlighted
 * Solo/Mute buttons with status-lights
+* Supports pickup mode for the mixer controls (requires FL Studio 20.9+)
 * Prevents jumps in volume and pan on faders/knobs
 * Controls selection of the active channel
 * Solos/Mutes the active channel
