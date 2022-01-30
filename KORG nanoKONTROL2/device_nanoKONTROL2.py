@@ -14,7 +14,7 @@ import config
 
 
 def OnInit():
-	print("*** nanometer script v1.0 by Robin Calvin (olyrhc) ***")
+	print("*** nanometer script v1.1 by Robin Calvin (olyrhc) ***")
 	global nm
 	global kn
 	nm = NanoMeter()
@@ -26,8 +26,9 @@ def OnDeInit():
 	if config.BracketedRange: kn.rename_range(0)
 	if config.ColoredRange: kn.set_range_color(1)
 
+
 def OnControlChange(event):
-	event.handled = False 					# If the script does not recognize the event, do nothing. It's then passed onto FL Studio to use.
+	event.handled = True 					# Set the event as handled for now so it does not get sent to FL Studio unless we want it to
 	button = event.data1
 	mixer_range = kn.mixer_range
 	master = config.StickyMaster
@@ -45,7 +46,7 @@ def OnControlChange(event):
 	
 		if button in kn.smr_tracks:	# Handle S,M,R buttons
 			if nm.statuslights_ready():
-				if mode == 0:
+				if mode == 0 and not kn.shift:
 					track = kn.smr_tracks[button]
 					if button in kn.smr('S'): soloTrack(track)
 					elif button in kn.smr('M'): muteTrack(track)
@@ -53,19 +54,29 @@ def OnControlChange(event):
 						if config.ArmedTracks: armTrack(track)
 						elif config.ExclusiveSelect: setTrackNumber(track)
 						else: selectTrack(track)
-				elif mode == 1:
+				elif mode == 1 and not kn.shift:
 					nr = selectedChannel()
 					if button == 19: soloChannel(nr)
 					elif button == 20: muteChannel(nr)
+				elif mode == 3 or kn.shift:
+					if kn.shift: kn.shiftevent = True
+					event.handled = False	# Pass the event to FL Studio
+					kn.smr_press(event)
 
 		elif button in faders:	# Handle mixer faders
-			if mode == 0: kn.volume_fader(event.data1,event.data2)
-			elif mode == 2: kn.playlist_zoom(event)
+			if mode == 0 and not kn.shift: kn.volume_fader(event.data1,event.data2)
+			elif mode == 2 and not kn.shift: kn.playlist_zoom(event)
+			elif mode == 3 or kn.shift:
+				if kn.shift: kn.shiftevent = True
+				event.handled = False
 
 		elif button in knobs:	# Handle mixer knobs
-			if mode == 0: kn.pan_knob(event.data1,event.data2)
-			elif mode == 1: kn.set_target_mixer(event)
-			elif mode == 2: kn.tempo_knob(event)
+			if mode == 0 and not kn.shift: kn.pan_knob(event.data1,event.data2)
+			elif mode == 1 and not kn.shift: kn.set_target_mixer(event)
+			elif mode == 2 and not kn.shift: kn.tempo_knob(event)
+			elif mode == 3 or kn.shift:
+				if kn.shift: kn.shiftevent = True
+				event.handled = False
 
 		elif button in track_select:	# Handle track-select buttons
 			if not kn.shift:
@@ -77,7 +88,8 @@ def OnControlChange(event):
 			
 		elif button in markers:	# Handle set and marker buttons
 			if kn.shift:
-				kn.handle_markers(button)
+				if mode == 0: kn.split_master(button)
+				if mode == 2: kn.handle_markers(button)
 			else:
 				kn.set_repeat_event(button)
 				if mode == 0: kn.move_range(event)
@@ -106,12 +118,15 @@ def OnControlChange(event):
 		elif button == 2:
 			kn.set_mode(event)
 			
-	event.handled = True	# Flag the event was handled so it does not go to FL Studio and get used twice.
+		elif mode == 3 or kn.shift:
+			event.handled = False	# Pass the event to FL Studio
+			kn.smr_press(event)
 
 
 def OnIdle():
 	mode = kn.current_mode
 	flashrec = kn.flash_rec
+	faderknob = kn.faderknob
 
 	if kn.repeat_event:
 		if mode == 0: kn.repeat_handler(0.3,0.18,kn.sel_mixer)
@@ -130,6 +145,12 @@ def OnIdle():
 		kn.flash_rec += 1
 		if flashrec == 12: kn.flash_rec = 0
 
+	if faderknob[1] and time() - faderknob[0] < 3:
+		kn.faderknob_focus()	# Focus the mixertrack if a fader/knob was moved
+		kn.faderknob[1] = False
+	elif time() - faderknob[0] >= 3 and faderknob[1] == False:
+		kn.faderknob[1] = True
+
 	if config.SleepTimer:
 		if kn.active[1]:
 			if time() - kn.active[0] > config.SleepTimer * 60:
@@ -142,7 +163,6 @@ def OnIdle():
 				kn.active[1] = True
 				kn.active[0] = time()
 			if not kn.active[1]: kn.pause(1)
-		
 
 
 def OnRefresh(flags):
@@ -457,6 +477,7 @@ class Kontrol():
 		self.lastzoom_x, self.lastzoom_y = 0, 0
 		self.lastfocus = 2
 		self.lastknob = 0
+		self.faderknob = [0,1]
 		self.rectoggle = 0
 		self.shift = False
 		self.shiftevent = False
@@ -516,6 +537,7 @@ class Kontrol():
 		current = getTrackVolume(track) * 127
 		if self.pickup: setTrackVolume(track,volume,2)
 		else: setTrackVolume(track,volume)
+		if track > 0: self.faderknob[0] = time()
 
 
 	def pan_knob(self,knob,val):
@@ -529,6 +551,7 @@ class Kontrol():
 		current = round(pval + 64)
 		if self.pickup: setTrackPan(track,pan,2)
 		else: setTrackPan(track,pan)
+		if track > 0: self.faderknob[0] = time()
 
 
 	def set_transport(self,event):
@@ -753,7 +776,7 @@ class Kontrol():
 		highlight = config.ColoredRange
 		brackets = config.BracketedRange
 		mode = self.current_mode
-		
+
 		if master: track = mixer_range[1]
 		else: track = mixer_range[0]
 
@@ -797,6 +820,46 @@ class Kontrol():
 				setTrackNumber(track,1)
 
 
+	def split_master(self,button):
+		self.shiftevent = True
+		marked = config.HighlightColor
+		umarked = -10261391
+		mixer_range = self.mixer_range
+		markers = self.markers
+		highlight = config.ColoredRange
+		brackets = config.BracketedRange
+		master = config.StickyMaster
+		skip = False
+
+		if self.shift and button == markers[0]:
+			if master:
+				um, m = 0,  -1
+				setTrackNumber(mixer_range[1],1)
+			else:
+				um, m = -1, 0
+				setTrackNumber(mixer_range[0],1)
+				if self.mixer_range[0] == 0: skip = True
+
+			if not skip:
+				if brackets:
+					name = False
+					n = getTrackName(mixer_range[um])
+					if n[0] == "[" and n[-1] == "]": name = n[1:-1]
+					if name: setTrackName(mixer_range[um],name)
+				if highlight: setTrackColor(mixer_range[um],umarked)
+
+			if master == True: config.StickyMaster = False
+			elif master == False: config.StickyMaster = True
+			if skip: setTrackNumber(1,1)
+			self.set_mixer_range(trackNumber())
+			if highlight: setTrackColor(self.mixer_range[m],marked)
+			if brackets:
+				name = False
+				n = getTrackName(self.mixer_range[m])
+				if n[0] != "[" and n[-1] != "]": name = "[" + n + "]"
+				if name: setTrackName(self.mixer_range[m],name)
+
+
 	def set_mode(self,event):
 	#	This switches between the Mixer, Channel rack and Playlist modes
 		cc = MIDI_CONTROLCHANGE
@@ -807,7 +870,7 @@ class Kontrol():
 		smr_lights = self.smr_btns
 		button = event.data1
 		vel = event.data2
-		windows = ('Mixer','Channel rack','Playlist/Pianoroll')
+		windows = ('Mixer','Channel rack','Playlist/Pianoroll','Controller Link mode')
 		mode = self.current_mode
 		modes = self.modes
 		cc = MIDI_CONTROLCHANGE
@@ -997,6 +1060,16 @@ class Kontrol():
 		self.repeat_event[button] = (time(),0)
 
 
+	def faderknob_focus(self):
+	#	Uses setTrackNumber() to scroll the mixer to the tracks of the controlled range	
+		if config.StickyMaster: t = 1
+		else: t = 0
+		selected = trackNumber()
+		setTrackNumber(self.mixer_range[t],1)
+		setTrackNumber(self.mixer_range[7],1)
+		setTrackNumber(selected)
+
+
 	def handle_markers(self,button):
 	#	Creates and jumps between markers in the playlist
 		markers = self.markers
@@ -1079,10 +1152,16 @@ class Kontrol():
 		if config.MixerMode: modes.append(0)
 		if config.ChannelrackMode: modes.append(1)
 		if config.PlaylistMode: modes.append(2)
+		if config.ControllerLinkMode: modes.append(3)
 		if current:
 			if len(modes) > 0: return modes[0]
 			else: return None
 		return modes
+
+
+	def smr_press(self,event):
+		if event.data2 == 127: midiOutMsg(event.midiId,event.midiChan,event.data1,127)
+		elif event.data2 == 0: midiOutMsg(event.midiId,event.midiChan,event.data1,0)
 
 
 def CheckConfig(config):
@@ -1090,13 +1169,14 @@ def CheckConfig(config):
 	# errors which the user might not understand.
 
 	boolparams = ['PeakMeter','ReversePeak','BigMeter','Clipping','PlayingOnly','ArmedTracks','ExclusiveSelect','TrackRangeOnly','StickyMaster',
-	'ColoredRange','BracketedRange','SelectedPeak','MixerMode','ChannelrackMode','PlaylistMode']
+	'ColoredRange','BracketedRange','SelectedPeak','MixerMode','ChannelrackMode','PlaylistMode','ControllerLinkMode']
 	numparams = {'MIDIChannel': (1,16), 'TransportChan': (1,16),'SleepTimer': (0,300),'HighlightColor': (-15461356,-1),'TempoBase':(10,397)}
 
 	if not hasattr(config,'Debug'): config.Debug = False
 
 	for p in boolparams + [*numparams]:		# Check for missing parameters
-		if not hasattr(config,p): raise RuntimeError("Parameter '"+ p +"' is missing from the config file!")
+		if not hasattr(config,p) and p == 'ControllerLinkMode': raise RuntimeError("Parameter '"+ p +"' is missing from the config file! Try updating config.py to the latest version.")
+		elif not hasattr(config,p): raise RuntimeError("Parameter '"+ p +"' is missing from the config file!")
 
 	for p in numparams:		# Check if number-parameters have the correct type/values
 		value = getattr(config,p)

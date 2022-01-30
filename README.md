@@ -18,7 +18,6 @@ It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later t
 * Mixertracks are highlighted
 * Solo/Mute buttons with status-lights
 * Supports pickup mode for the mixer controls (requires FL Studio 20.9+)
-* Prevents jumps in volume and pan on faders/knobs
 * Controls selection of the active channel
 * Solos/Mutes the active channel
 * Controls mixer track targets
@@ -28,5 +27,6 @@ It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later t
 * Creates time-markers and jump between them
 * Controls the horizontal/vertical zooming of the playlist
 * Controls the current tempo
+* Supports controller linking of buttons, faders and knobs
 
 #### Please refer to the [wiki](https://github.com/olyrhc/nanometer/wiki) for more details

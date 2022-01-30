@@ -20,15 +20,19 @@ HighlightColor = -11835046
 
 MixerMode = True
 #	True (Default) enables the Mixer mode.
-#	Disable removes the Mixer mode.
+#	False disables the Mixer mode.
 
 ChannelrackMode = True
 #	True (Default) enables the Channel rack mode.
-#	Disable removes the Channel rack mode.
+#	False disables the Channel rack mode.
 
 PlaylistMode = True
 #	True (Default) enables the Playlist mode.
-#	Disable removes the Playlist mode.
+#	False disables the Playlist mode.
+
+ControllerLinkMode = False
+# True enables the Controller Link mode.
+# False (Default) disables the Controller Link mode.
 
 #	PeakMeter settings
 
@@ -85,4 +89,3 @@ BracketedRange = True
 TempoBase = 80
 #	This sets the min (bottom)-value of the tempo-knob in the Playlist control mode.
 #	The value can be between 10 and 397.
-
