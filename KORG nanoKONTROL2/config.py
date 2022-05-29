@@ -1,6 +1,6 @@
 ### nanometer configfile
 
-#	General settings
+# General settings
 
 MIDIChannel = 1
 #	The MIDI channel number that the nanoKONTROL 2 uses to control the lights.
@@ -14,9 +14,9 @@ SleepTimer  = 5
 #	The number of minutes before the script enters lightshow-mode. 
 #	Value can be between 0 (lightshow is disabled) to 300.
 
-HighlightColor = -11835046
-#	The color used for the marked mixer tracks.
-#	The value is in RGBA format. Please read the documentation for more info.
+PlayBlinkTempo = True
+#   True will make the Play button flash in sync with the tempo when playing.
+#   False will instead make the Record button flash in tempo sync during recording.
 
 MixerMode = True
 #	True (Default) enables the Mixer mode.
@@ -31,10 +31,10 @@ PlaylistMode = True
 #	False disables the Playlist mode.
 
 ControllerLinkMode = False
-# True enables the Controller Link mode.
-# False (Default) disables the Controller Link mode.
+#   True enables the Controller Link mode.
+#   False (Default) disables the Controller Link mode.
 
-#	PeakMeter settings
+# PeakMeter settings
 
 PeakMeter = True
 #	True (Default) enables the peak-meter.
@@ -60,7 +60,7 @@ SelectedPeak = False
 #	If set to True, the nanometer will show the peaks for the selected track.
 #	If set to False (Default), it will show the peaks for the master track.
 
-#	Mixer settings
+# Mixer settings
 
 ArmedTracks = False
 #	If set to True, the R-buttons will be used for arming tracks.
@@ -78,13 +78,23 @@ StickyMaster = False
 #	If set to True, the master track will always be included in the track-range.
 #	False (Default) will not include the master track.
 
+RangeDisplayRect = True
+#   If set to True (Default), the mixer tracks controlled by the nanoKONTROL will be
+#   marked by a red rectangle. To use the ColoredRange option, this must be set to False.
+
 ColoredRange = True
 #	If set to True (Default), the mixer tracks controlled by the nanoKONTROL will be
-#	highlighted in their own color. False disables the coloring.
+#	colored by the script. False disables the coloring.
+
+HighlightColor = -11835046
+#	The color used for the marked mixer tracks.
+#	The value is in RGBA format. Please read the documentation for more info.
 
 BracketedRange = True
 #	If set to True (Default), the mixer tracks controlled by the nanoKONTROL will
 #	have brackets added to their names. False will leave the names untouched.
+
+# Playlist settings
 
 TempoBase = 80
 #	This sets the min (bottom)-value of the tempo-knob in the Playlist control mode.

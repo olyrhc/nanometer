@@ -10,21 +10,23 @@ from arrangement import *
 from transport import *
 from general import *
 from time import time
-import config
 
 
 def OnInit():
-	print("*** nanometer script v1.1 by Robin Calvin (olyrhc) ***")
+	print("*** nanometer script v1.2 by Robin Calvin (olyrhc) ***")
 	global nm
 	global kn
+	InitConfig()
 	nm = NanoMeter()
 	kn = Kontrol()
+	hardwareRefreshMixerTrack(-1)
 	if config.PeakMeter: setHasMeters()
 
 	
 def OnDeInit():
 	if config.BracketedRange: kn.rename_range(0)
 	if config.ColoredRange: kn.set_range_color(1)
+	if config.RangeDisplayRect: kn.set_range_rectangle(1)
 
 
 def OnControlChange(event):
@@ -71,7 +73,8 @@ def OnControlChange(event):
 				event.handled = False
 
 		elif button in knobs:	# Handle mixer knobs
-			if mode == 0 and not kn.shift: kn.pan_knob(event.data1,event.data2)
+			if mode == 0 and not kn.shift: kn.func_knob(event.data1,event.data2)
+			elif mode == 0 and kn.shift and kn.control_not_linked(event.data1): kn.func_knob(event.data1,event.data2,False)
 			elif mode == 1 and not kn.shift: kn.set_target_mixer(event)
 			elif mode == 2 and not kn.shift: kn.tempo_knob(event)
 			elif mode == 3 or kn.shift:
@@ -138,10 +141,15 @@ def OnIdle():
 			setLoopMode()
 			kn.loopmode = None
 
+	if kn.metronome:
+		if time() - kn.metronome > 0.7:
+			globalTransport(110,1,2,15)
+			kn.metronome = None
+
 	if flashrec and flashrec <= 12:
 		if flashrec % 2:	# Check if flash_rec is even
-			kn.rectoggle ^= 1
-			kn.toggle_rec_light(kn.rectoggle)
+			kn.savelighttoggle ^= 1
+			kn.blink_transp_light(kn.savelighttoggle,True)
 		kn.flash_rec += 1
 		if flashrec == 12: kn.flash_rec = 0
 
@@ -182,12 +190,13 @@ def OnRefresh(flags):
 	if dirty_mix_sel and config.SelectedPeak:
 		nm.track = trackNumber()
 
-	if dirty_mix_ctrl and config.ColoredRange:	# Triggers on script-restart
+	if dirty_mix_ctrl:	# Triggers on script-restart
 		if not kn.init_range:
 			if mode == 0:
 				kn.clean_colors()
-				kn.set_range_color()
-	
+				if config.RangeDisplayRect: kn.set_range_rectangle()
+				elif config.ColoredRange: kn.set_range_color()
+
 	if mode == 0 and nm.statuslights_ready():
 		if dirty_mix_sel and dirty_mix_ctrl: kn.set_track_status()	# Update the SMR lights when the mixer changes
 
@@ -205,7 +214,8 @@ def OnRefresh(flags):
 		if mode == 0:
 			kn.set_mixer_range(1)
 			kn.clean_colors()
-			kn.set_range_color()
+			if config.RangeDisplayRect: kn.set_range_rectangle()
+			elif config.ColoredRange: kn.set_range_color()
 		kn.active[1] = True
 
 	if config.Debug:
@@ -222,8 +232,8 @@ def OnRefresh(flags):
 
 def OnUpdateBeatIndicator(beat):
 	if beat > 0:
-		kn.rectoggle ^= 1
-		kn.toggle_rec_light(kn.rectoggle)		# Toggle Rec-light on/off when recording
+		kn.lighttoggle ^= 1
+		kn.blink_transp_light(kn.lighttoggle)		# Toggle Rec-light on/off when recording
 
 	
 def OnUpdateMeters():
@@ -231,7 +241,7 @@ def OnUpdateMeters():
 
 
 
-class NanoMeter():
+class NanoMeter:
 
 	def __init__(self):
 		self.lights = ((19,20,21),(22,23,24),(25,26,27),(28,29,30),(31,32,33),(34,35,36),(37,38,39),(40,41,42))	# All the MIDI CC for the SMR light-buttons
@@ -275,7 +285,9 @@ class NanoMeter():
 
 		if peak_LR > maxedpeak:	# Detect the highest peak and adjust the meter-range accordingly
 			self.peak_list = self.create_peak_list(peak_LR)
-			self.maxedpeak = peak_LR
+			self.maxedpeak = peak_LR		
+		elif maxedpeak - peak_LR > 7.5:	# If gain is dropping, lower maxedpeak to catch up
+			if self.maxedpeak > -49: self.maxedpeak -= 0.3
 
 		if self.volume != volume:	# If the volume has changed, reset the highest detected peak
 			self.maxedpeak = -50
@@ -310,7 +322,7 @@ class NanoMeter():
 			if wasplaying and not isPlaying():
 				self.set_light(8,1,0)	# Clear all the lights when playing stops
 				if kn.current_mode == 0: kn.set_track_status()
-				elif kn.current_mode ==1: kn.channel_status()
+				elif kn.current_mode == 1: kn.channel_status()
 				if config.Debug: print("Peaklight  reset")
 		else:
 			if config.Clipping:
@@ -455,6 +467,7 @@ class NanoMeter():
 
 	def statuslights_ready(self):
 	#	Returns True if the SMR status-lights are ready, i.e. the lights are not busy with the peak meter
+		if not config.PeakMeter: return True
 		if config.PlayingOnly and not isPlaying(): return True
 		elif not config.PlayingOnly:
 			if getTrackPeaks(self.track,2) < 0.001: return True
@@ -462,7 +475,7 @@ class NanoMeter():
 
 
 
-class Kontrol():
+class Kontrol:
 
 	def __init__(self):
 		self.tracks = []
@@ -478,12 +491,14 @@ class Kontrol():
 		self.lastfocus = 2
 		self.lastknob = 0
 		self.faderknob = [0,1]
-		self.rectoggle = 0
+		self.lighttoggle = 0
+		self.savelighttoggle = 0
 		self.shift = False
 		self.shiftevent = False
 		self.active = [time(),True,0]
 		self.flash_rec = 0
 		self.loopmode = None
+		self.metronome = None
 		self.track_select = (0,1)					# Track buttons cc codes
 		self.markers = (3,4,5)						# Marker buttons cc codes
 		self.transp_btns = (6,7,8,9,10)			# Transport buttons cc codes
@@ -492,6 +507,7 @@ class Kontrol():
 		self.faders = (43,44,45,46,47,48,49,50)	# Faders cc codes
 		if getVersion() >= 13: self.pickup = True
 		else: self.pickup = False
+
 
 	def smr(self,key):
 	#	Generates a list of numbers that match the CC codes for the S, M or R buttons
@@ -534,23 +550,29 @@ class Kontrol():
 		n = faderlist.index(fader)
 		track = mixer_range[n]
 		volume = val / 127 - 0.003
-		current = getTrackVolume(track) * 127
+		if volume < 0.01: volume = 0
+		elif volume > 0.99: volume = 1
 		if self.pickup: setTrackVolume(track,volume,2)
 		else: setTrackVolume(track,volume)
 		if track > 0: self.faderknob[0] = time()
 
 
-	def pan_knob(self,knob,val):
-	#	This takes the input from the nanoKontrol knobs and use it to set the panning
+	def func_knob(self,knob,val,pan=True):
+	#	This takes the input from the nanoKontrol knobs and use it to set the panning or stereo separation
+		if not pan:
+			setFunc = setTrackStereoSep
+			self.shiftevent = True
+		else: setFunc = setTrackPan
+
 		knoblist = self.knobs
 		mixer_range = self.mixer_range
 		n = knoblist.index(knob)
 		track = mixer_range[n]
 		pan = val / 127 * 2 - 1.008
-		pval = getTrackPan(track) * 64
-		current = round(pval + 64)
-		if self.pickup: setTrackPan(track,pan,2)
-		else: setTrackPan(track,pan)
+		if pan < -0.99: pan = -1
+		elif pan > 0.99: pan = 1
+		if self.pickup: setFunc(track,pan,2)
+		else: setFunc(track,pan)
 		if track > 0: self.faderknob[0] = time()
 
 
@@ -562,23 +584,27 @@ class Kontrol():
 		button = event.data1
 		vel = event.data2
 		
-		if button == transp_btns[0]:					# Rewind
+		if button == transp_btns[0]:		# Rewind
 			if vel == 127: rewind(2,15)
 			elif vel == 0: rewind(0,15)
 			midiOutMsg(cc,chan,button,vel)
-		elif button == transp_btns[1]:				# FForward
+		elif button == transp_btns[1]:		# FForward
 			if vel == 127: fastForward(2,15)
 			elif vel == 0: fastForward(0,15)
 			midiOutMsg(cc,chan,button,vel)
-		elif button == transp_btns[2]:				# Stop
+		elif button == transp_btns[2]:		# Stop
 			if vel == 127:
 				stop()
 				self.loopmode = time()	# Register the time of the keypress for the loopmode event
 			elif vel == 0: self.loopmode = None	# Clear the loopmode event
 			midiOutMsg(cc,chan,button,vel)
-			kn.rectoggle = 0		# Reset rectoggle
+			kn.lighttoggle = 0		# Reset lighttoggle
 
-		elif button == transp_btns[3] and vel == 127: start()		# Play
+		elif button == transp_btns[3]:		# Play
+			if vel == 127:
+				start()
+				self.metronome = time()
+			elif vel == 0: self.metronome = None
 		elif button == transp_btns[4] and vel == 127: record()	# Record
 
 
@@ -595,15 +621,20 @@ class Kontrol():
 		else: midiOutMsg(cc,chan,light[4],0)
 
 
-	def toggle_rec_light(self,state):
-	#	This is used to toggle (blink) the light of the Record-button while recording
+	def blink_transp_light(self,state,flashrec=False):
+	#	This is used to toggle (blink) the light of the Play/Record-buttons
 		light = self.transp_btns
 		cc = MIDI_CONTROLCHANGE
 		chan = config.TransportChan -1
-		
-		if isPlaying() and isRecording() or self.flash_rec:
-			if state: midiOutMsg(cc,chan,light[4],127)
-			else: midiOutMsg(cc,chan,light[4],0)
+		playblink = config.PlayBlinkTempo
+
+		def blink(n):
+			if state: midiOutMsg(cc,chan,light[n],127)
+			else: midiOutMsg(cc,chan,light[n],0)
+
+		if flashrec: blink(4)
+		elif playblink and isPlaying(): blink(3)
+		elif isPlaying() and isRecording(): blink(4)
 
 
 	def set_mixer_range(self,start):
@@ -656,6 +687,18 @@ class Kontrol():
 			elif move == -1:
 				if selected == 0: setTrackNumber(126)
 				else: setTrackNumber(selected -1,1)	#move to previous
+
+
+	def set_range_rectangle(self,state=None):
+	#	This is used to set the red rectangle that marks the controlled mixer tracks
+		self.init_range = True
+		if config.StickyMaster: start = self.mixer_range[1]
+		else: start = self.mixer_range[0]
+		end = self.mixer_range[-1]
+
+		if not state:
+			miDisplayRect(start,end,MaxInt,2)
+		else: miDisplayRect(start,end,0)
 
 
 	def set_range_color(self,state=None):
@@ -718,8 +761,12 @@ class Kontrol():
 	def clean_colors(self):
 	#	Resets the default colors (where necessary) for all the mixer-tracks
 		marked = config.HighlightColor
+		rect_master_color = -4177326
 		default = -10261391
 		
+		color = getTrackColor(0)
+		if color == rect_master_color: setTrackColor(0,default)
+
 		for track in range(126):
 			try:
 				color = getTrackColor(track)
@@ -774,6 +821,7 @@ class Kontrol():
 		markers = self.markers
 		master = config.StickyMaster
 		highlight = config.ColoredRange
+		d_rect = config.RangeDisplayRect
 		brackets = config.BracketedRange
 		mode = self.current_mode
 
@@ -791,6 +839,7 @@ class Kontrol():
 				setTrackNumber(self.mixer_range[-1],1)
 				setTrackNumber(track,1)
 				if highlight: self.set_range_color()
+				if d_rect: self.set_range_rectangle()
 
 		elif event.data1 == markers[1]:	# Marker prev-button
 			track -= 1
@@ -799,6 +848,7 @@ class Kontrol():
 			else:
 				self.set_mixer_range(track)
 				if highlight: self.set_range_color(2)
+				if d_rect: self.set_range_rectangle()
 				if brackets:
 					self.rename_range(2)
 				if master: idx = 1
@@ -813,6 +863,7 @@ class Kontrol():
 			else:
 				self.set_mixer_range(track)
 				if highlight: self.set_range_color(3)
+				if d_rect: self.set_range_rectangle()
 				if brackets:
 					self.rename_range(3)	# clear brackets to the left of the range
 					self.rename_range(1)	# update brackets to include the new track
@@ -821,15 +872,20 @@ class Kontrol():
 
 
 	def split_master(self,button):
+	#	This locks/unlocks the master track to the first control group
 		self.shiftevent = True
-		marked = config.HighlightColor
+		marked = False
 		umarked = -10261391
 		mixer_range = self.mixer_range
 		markers = self.markers
 		highlight = config.ColoredRange
+		d_rect = config.RangeDisplayRect
 		brackets = config.BracketedRange
 		master = config.StickyMaster
 		skip = False
+
+		if d_rect: marked = -4177326
+		elif highlight: marked = config.HighlightColor
 
 		if self.shift and button == markers[0]:
 			if master:
@@ -846,13 +902,16 @@ class Kontrol():
 					n = getTrackName(mixer_range[um])
 					if n[0] == "[" and n[-1] == "]": name = n[1:-1]
 					if name: setTrackName(mixer_range[um],name)
-				if highlight: setTrackColor(mixer_range[um],umarked)
+				if marked: setTrackColor(mixer_range[um],umarked)
 
 			if master == True: config.StickyMaster = False
 			elif master == False: config.StickyMaster = True
 			if skip: setTrackNumber(1,1)
 			self.set_mixer_range(trackNumber())
-			if highlight: setTrackColor(self.mixer_range[m],marked)
+			if marked:
+				if d_rect: self.set_range_rectangle()
+				if d_rect and m < 0: pass
+				else: setTrackColor(self.mixer_range[m],marked)
 			if brackets:
 				name = False
 				n = getTrackName(self.mixer_range[m])
@@ -865,7 +924,7 @@ class Kontrol():
 		cc = MIDI_CONTROLCHANGE
 		chan = event.midiChan
 		smr_chan = config.MIDIChannel - 1
-		highlight = config.ColoredRange
+		highlight = None
 		brackets = config.BracketedRange
 		smr_lights = self.smr_btns
 		button = event.data1
@@ -875,6 +934,9 @@ class Kontrol():
 		modes = self.modes
 		cc = MIDI_CONTROLCHANGE
 		peaks = getTrackPeaks(nm.track,2)
+
+		if config.RangeDisplayRect: highlight = self.set_range_rectangle
+		elif config.ColoredRange: highlight = self.set_range_color
 
 		if len(self.modes) == 0: return	# Break if all modes are disabled in the configfile
 
@@ -888,17 +950,17 @@ class Kontrol():
 			
 			if mode == 0:
 				if brackets: self.rename_range(1)	# Add brackets to names
-				if highlight: self.set_range_color()	# Set range colors
+				if highlight: highlight()	# Set range colors
 				if peaks < 0.01: self.set_track_status()
 			elif mode > 0 and 0 in modes:
-				if highlight: self.set_range_color(1)	# Clear range colors
+				if highlight: highlight(1)	# Clear range colors
 				if brackets: self.rename_range(0)
 				if peaks < 0.01:
 					for light in smr_lights:	# Clear all lights
 						midiOutMsg(cc,smr_chan,light,0)
 					if mode == 1: self.channel_status()
 
-			showWindow(mode)
+			if mode <=2: showWindow(mode)
 			setHintMsg(windows[mode])
 			self.current_mode = mode
 				
@@ -1108,7 +1170,6 @@ class Kontrol():
 			globalTransport(92,1,6,15)
 			if mixermode: kn.set_range_color()
 			self.flash_rec = 1
-			
 
 
 	def pause(self,pause=None):
@@ -1160,31 +1221,78 @@ class Kontrol():
 
 
 	def smr_press(self,event):
+	#	Turns the pressed Solo/Mute/Rec buttons light on or off.
 		if event.data2 == 127: midiOutMsg(event.midiId,event.midiChan,event.data1,127)
 		elif event.data2 == 0: midiOutMsg(event.midiId,event.midiChan,event.data1,0)
 
 
-def CheckConfig(config):
-	# Adds an extra layer of error-detection for the configfile to avoid more complicated
-	# errors which the user might not understand.
+	def control_not_linked(self,cc):
+		try:	# findEventID lacks proper documentation in the API. Let's put a try/except just in case.
+			id = findEventID(EncodeRemoteControlID(getPortNumber(), 0, 0) + cc, 1)
+			val = getLinkedValue(id)
+			if val == -1: return True
+			else: return False
+		except:
+			return False	# Assume control is linked if findEventID fails
 
-	boolparams = ['PeakMeter','ReversePeak','BigMeter','Clipping','PlayingOnly','ArmedTracks','ExclusiveSelect','TrackRangeOnly','StickyMaster',
-	'ColoredRange','BracketedRange','SelectedPeak','MixerMode','ChannelrackMode','PlaylistMode','ControllerLinkMode']
+
+def InitConfig():
+	# Tries to import the config file and report any error it encounters.
+	# Missing config options will be initiated with their default values.
+	global config
+	config = None
+	options = {	'MIDIChannel': 1, 'TransportChan': 14, 'SleepTimer': 5, 'HighlightColor': -11835046, 'MixerMode': True, 'ChannelrackMode': True,
+				'PlaylistMode': True, 'ControllerLinkMode': False, 'PlayBlinkTempo': True, 'PeakMeter': True, 'PlayingOnly': False, 'ReversePeak': False,
+				'BigMeter': False, 'Clipping': True, 'SelectedPeak': False, 'ArmedTracks': False, 'ExclusiveSelect': True, 'TrackRangeOnly': False,
+				'StickyMaster': False, 'RangeDisplayRect': True, 'ColoredRange': True, 'BracketedRange': True, 'TempoBase': 80	}
+	boolparams = ['PeakMeter','ReversePeak','BigMeter','Clipping','PlayingOnly','ArmedTracks','ExclusiveSelect','TrackRangeOnly','StickyMaster','ColoredRange',
+				'BracketedRange','SelectedPeak','MixerMode','ChannelrackMode','PlaylistMode','ControllerLinkMode','PlayBlinkTempo','RangeDisplayRect']
 	numparams = {'MIDIChannel': (1,16), 'TransportChan': (1,16),'SleepTimer': (0,300),'HighlightColor': (-15461356,-1),'TempoBase':(10,397)}
 
+	try: import config
+	except Exception as e: print('nanometer config: ' + str(e) +'.')
+
+	if not config:
+		print('nanometer config: using default options.')
+		class config: pass
+		config = config()
+
+		for param in options:	# Use default values for everything
+			setattr(config,param,options[param])
+
+	else:
+		missing = []
+		for param in boolparams:	# Check if boolean options are set correctly
+			if hasattr(config,param):
+				value = getattr(config,param)
+				if type(value) is not bool:
+					print('nanometer config: '+ param +' option is incorrectly set (must be True or False).')
+					delattr(config,param)	# remove the option so it can be re-added with the default value
+
+		for param in numparams:		# Check if options with numbers have the correct type/values
+			if hasattr(config,param):
+				value = getattr(config,param)
+				if type(value) is not int:
+					print('nanometer config: '+ param +' option is incorrectly set (must be a number).')
+					delattr(config,param)
+				elif value not in range(numparams[param][0],numparams[param][1]+1):
+					print('nanometer config: '+ param +' option requires a number between ' + str(numparams[param][0]) +' and ' + str(numparams[param][1]) +'.')
+					delattr(config,param)
+
+		for param in options:	# Use default values for missing/incorrect options
+			if not hasattr(config,param):
+				setattr(config,param,options[param])
+				missing.append(param)
+
+		if missing: print('nanometer config: using default value for ' +', '.join(missing) +'.')
+		else: print('nanometer config: imported ok.')
+
+	# Make some final adjustments
 	if not hasattr(config,'Debug'): config.Debug = False
-
-	for p in boolparams + [*numparams]:		# Check for missing parameters
-		if not hasattr(config,p) and p == 'ControllerLinkMode': raise RuntimeError("Parameter '"+ p +"' is missing from the config file! Try updating config.py to the latest version.")
-		elif not hasattr(config,p): raise RuntimeError("Parameter '"+ p +"' is missing from the config file!")
-
-	for p in numparams:		# Check if number-parameters have the correct type/values
-		value = getattr(config,p)
-		if type(value) is not int: raise TypeError(p +": Value is of wrong type (must be a number!)")
-		elif value not in range(numparams[p][0],numparams[p][1]+1): raise ValueError(p + ": requires a number between " + str(numparams[p][0]) + " and " + str(numparams[p][1]))
-
-	for p in boolparams:		# Check if boolean parameters are set correctly
-		value = getattr(config,p)
-		if type(value) is not bool: raise TypeError(p +": Value is of wrong type (must be True or False!)")
-
-CheckConfig(config)
+	if hasattr(config,'RangeDisplayRect') and config.RangeDisplayRect == True:
+		if getVersion() >= 17:
+			config.ColoredRange = False
+			config.BracketedRange = False
+		else:
+			print('nanometer: RangeDisplayRect option requires a newer version of FL Studio.')
+			config.RangeDisplayRect = False

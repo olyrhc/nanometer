@@ -11,7 +11,7 @@ It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later t
 * Indicates clipping of the audio-signal
 * Functioning transport buttons
 * Quick-saves the current project with a button
-* Rec-button flashes in tempo-sync during recording
+* Play-button flashes in sync with the tempo while playing
 * Enters pause-mode lightshow when idle
 * Has many configurable options
 * Controls master + all 125 mixer tracks
