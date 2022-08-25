@@ -10,23 +10,23 @@ It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later t
 * Auto-detects stereo/mono and changes the lights automatically
 * Indicates clipping of the audio-signal
 * Functioning transport buttons
-* Quick-saves the current project with a button
+* Quick-save the current project with a button
 * Play-button flashes in sync with the tempo while playing
 * Enters pause-mode lightshow when idle
 * Has many configurable options
-* Controls master + all 125 mixer tracks
+* Gives you full control of all 125 mixer tracks
 * Mixertracks are highlighted
 * Solo/Mute buttons with status-lights
 * Supports pickup mode for the mixer controls (requires FL Studio 20.9+)
-* Controls selection of the active channel
-* Solos/Mutes the active channel
-* Controls mixer track targets
-* Toggles plugin-windows on/off
-* Toggles the pianoroll on/off
-* Controls selection of patterns
-* Creates time-markers and jump between them
-* Controls the horizontal/vertical zooming of the playlist
-* Controls the current tempo
-* Supports controller linking of buttons, faders and knobs
+* Selection of the active channel
+* Solo/Mute the active channel
+* Set the mixer track target for the active channel
+* Toggle plugin-windows on/off
+* Toggle the pianoroll on/off
+* Select patterns
+* Create time-markers and jump between them
+* Adjust the horizontal/vertical zooming of the playlist
+* Adjust the current tempo
+* Has support for controller linking of buttons, faders and knobs
 
 #### Please refer to the [wiki](https://github.com/olyrhc/nanometer/wiki) for more details
