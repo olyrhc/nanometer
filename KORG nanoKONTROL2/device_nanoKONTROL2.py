@@ -13,7 +13,7 @@ from time import time
 
 
 def OnInit():
-	print("*** nanometer script v1.2 by Robin Calvin (olyrhc) ***")
+	print("*** nanometer script v1.3 by Robin Calvin (olyrhc) ***")
 	global nm
 	global kn
 	InitConfig()
@@ -49,13 +49,14 @@ def OnControlChange(event):
 		if button in kn.smr_tracks:	# Handle S,M,R buttons
 			if nm.statuslights_ready():
 				if mode == 0 and not kn.shift:
+					if config.RangeRectTimer: kn.hl_timecheck = time()
 					track = kn.smr_tracks[button]
 					if button in kn.smr('S'): soloTrack(track)
 					elif button in kn.smr('M'): muteTrack(track)
 					elif button in kn.smr('R'):
 						if config.ArmedTracks: armTrack(track)
-						elif config.ExclusiveSelect: setTrackNumber(track)
-						else: selectTrack(track)
+						elif config.MultiSelect: selectTrack(track) 
+						else: setTrackNumber(track)
 				elif mode == 1 and not kn.shift:
 					nr = selectedChannel()
 					if button == 19: soloChannel(nr)
@@ -66,7 +67,9 @@ def OnControlChange(event):
 					kn.smr_press(event)
 
 		elif button in faders:	# Handle mixer faders
-			if mode == 0 and not kn.shift: kn.volume_fader(event.data1,event.data2)
+			if mode == 0 and not kn.shift:
+				if len(kn.selectedtracks) > 1: kn.multi_fader (event.data1,event.data2)
+				else: kn.volume_fader(event.data1,event.data2)
 			elif mode == 2 and not kn.shift: kn.playlist_zoom(event)
 			elif mode == 3 or kn.shift:
 				if kn.shift: kn.shiftevent = True
@@ -83,21 +86,33 @@ def OnControlChange(event):
 
 		elif button in track_select:	# Handle track-select buttons
 			if not kn.shift:
-				kn.set_repeat_event(button)
 				if mode == 0:
-					kn.sel_mixer(button)
+					if kn.set_held:
+						kn.vol_ftune(button)
+						kn.set_repeat_event(button,0.4,0.15,kn.vol_ftune)
+					else:
+						kn.sel_mixer(button)
+						kn.set_repeat_event(button,0.4,0.18,kn.sel_mixer)
 				elif mode == 2:
 					kn.playlist_nav(button)
+					kn.set_repeat_event(button,0.4,0.1,kn.playlist_nav)
 			
 		elif button in markers:	# Handle set and marker buttons
 			if kn.shift:
 				if mode == 0: kn.split_master(button)
 				if mode == 2: kn.handle_markers(button)
+			elif button == 3:
+				kn.preserve_mixdiff(event)
+				kn.set_held = True
 			else:
-				kn.set_repeat_event(button)
-				if mode == 0: kn.move_range(event)
-				elif mode == 1: kn.set_channel(button)
-				elif mode == 2: kn.playlist_nav(button)
+				if mode == 0:
+					kn.move_range(event)
+				elif mode == 1:
+					kn.set_channel(button)
+					kn.set_repeat_event(button,0.4,0.15,kn.set_channel)
+				elif mode == 2:
+					kn.playlist_nav(button)
+					kn.set_repeat_event(button,0.4,0.1,kn.playlist_nav)
 
 		elif button in transp_btns:
 			if kn.shift:
@@ -105,7 +120,7 @@ def OnControlChange(event):
 			else:
 				kn.set_transport(event)
 
-		elif button == 2:
+		elif button == 2:	# Cycle button
 			kn.set_mode(event)
 
 	elif event.data2 == 0:	# Handle button-release events
@@ -113,14 +128,22 @@ def OnControlChange(event):
 		kn.active[1] = True
 	
 		if button in track_select + markers:	# Track-select release
-			if not kn.shift: del kn.repeat_event[button]
+			if button == 3:
+				kn.set_held = False
+				kn.preserve_mixdiff(event)
+				if not kn.ftune: kn.move_range(event)
+				kn.ftune = False
+			elif not kn.shift:
+				if button in kn.repeat_events.keys(): del kn.repeat_events[button]
 			
 		elif button in transp_btns:	# Transport button release
 			kn.set_transport(event)
 
-		elif button == 2:
+		elif button == 2:	# Cycle button
+			if kn.mode_blinks > 0: kn.mode_blink(True)
 			kn.set_mode(event)
-			
+			kn.mode_blinks = 1
+
 		elif mode == 3 or kn.shift:
 			event.handled = False	# Pass the event to FL Studio
 			kn.smr_press(event)
@@ -129,12 +152,11 @@ def OnControlChange(event):
 def OnIdle():
 	mode = kn.current_mode
 	flashrec = kn.flash_rec
+	modeblinks = kn.mode_blinks
 	faderknob = kn.faderknob
 
-	if kn.repeat_event:
-		if mode == 0: kn.repeat_handler(0.3,0.18,kn.sel_mixer)
-		if mode == 1: kn.repeat_handler(0.3,0.15,kn.set_channel)
-		if mode == 2: kn.repeat_handler(0.4,0.1,kn.playlist_nav)
+	if kn.repeat_events:
+		kn.repeat_handler()
 
 	if kn.loopmode:
 		if time() - kn.loopmode > 0.7:
@@ -153,11 +175,20 @@ def OnIdle():
 		kn.flash_rec += 1
 		if flashrec == 12: kn.flash_rec = 0
 
+	if config.ModeBlink:
+		if modeblinks > 0: kn.mode_blink()
+
 	if faderknob[1] and time() - faderknob[0] < 3:
 		kn.faderknob_focus()	# Focus the mixertrack if a fader/knob was moved
 		kn.faderknob[1] = False
 	elif time() - faderknob[0] >= 3 and faderknob[1] == False:
 		kn.faderknob[1] = True
+
+	if kn.hl_timecheck != 0:
+		if not kn.midisplayrect: kn.set_range_rectangle()
+		if time() - kn.hl_timecheck >= config.RangeRectTimer:
+			kn.set_range_rectangle(1)
+			kn.hl_timecheck = 0
 
 	if config.SleepTimer:
 		if kn.active[1]:
@@ -182,6 +213,8 @@ def OnRefresh(flags):
 	dirty_perf = flags & HW_Dirty_Performance
 	
 	mode = kn.current_mode
+
+	kn.selected_tracks()
 
 	if config.SleepTimer:
 		if dirty_mix_sel or dirty_mix_disp or dirty_mix_ctrl or dirty_leds:
@@ -231,9 +264,12 @@ def OnRefresh(flags):
 
 
 def OnUpdateBeatIndicator(beat):
-	if beat > 0:
+	blink = True
+	if not config.BlinkFullTempo:
+		if beat == 0: blink = False
+	if blink:
 		kn.lighttoggle ^= 1
-		kn.blink_transp_light(kn.lighttoggle)		# Toggle Rec-light on/off when recording
+		kn.blink_transp_light(kn.lighttoggle)
 
 	
 def OnUpdateMeters():
@@ -478,11 +514,12 @@ class NanoMeter:
 class Kontrol:
 
 	def __init__(self):
+	#	Initiates a lot of stuff
 		self.tracks = []
 		self.smr_tracks = {}
 		self.mixer_range = []
 		self.set_mixer_range(1)
-		self.repeat_event = {}		
+		self.repeat_events = {}		
 		self.defaultcolors = {}
 		self.init_range = False
 		self.modes = self.get_modes(0)
@@ -491,20 +528,44 @@ class Kontrol:
 		self.lastfocus = 2
 		self.lastknob = 0
 		self.faderknob = [0,1]
+		self.hl_timecheck = 0
+		self.midisplayrect = False
 		self.lighttoggle = 0
 		self.savelighttoggle = 0
 		self.shift = False
 		self.shiftevent = False
+		self.set_held = False
+		self.ftune = False
 		self.active = [time(),True,0]
 		self.flash_rec = 0
+		self.mode_blinks = 0
 		self.loopmode = None
 		self.metronome = None
+		self.volume = None
+		self.faderlock = [0,time()]
+		self.selectedtracks = ()
+		self.mixdiff = config.PreserveMixDiff
 		self.track_select = (0,1)					# Track buttons cc codes
 		self.markers = (3,4,5)						# Marker buttons cc codes
 		self.transp_btns = (6,7,8,9,10)			# Transport buttons cc codes
 		self.knobs = (11,12,13,14,15,16,17,18)		# Knobs cc codes
 		self.smr_btns = [i for i in range(19,43)]
 		self.faders = (43,44,45,46,47,48,49,50)	# Faders cc codes
+		self.volume_table = {1.0: (5.6,0.0036), 0.98: (5.0,0.0036), 0.943: (4.0,0.0035), 0.907: (3.0,0.0035), 0.87: (2.0,0.0035), 0.835: (1.0,0.0035),
+		0.8: (0.0,0.0035),0.765: (-1.0,0.0035), 0.732: (-2.0,0.0032), 0.6962: (-3.0,0.0032), 0.664: (-4.0,0.00316), 0.632: (-5.0,0.00325), 0.6: (-6.0,0.00319),
+		0.568: (-7.0,0.0031), 0.536: (-8.0,0.003), 0.506: (-9.0,0.00295), 0.476: (-10.0,0.0029), 0.447: (-11.0,0.00289), 0.418: (-12.0,0.0027),
+		0.391: (-13.0,0.00263), 0.365: (-14.0,0.00253), 0.34: (-15.0,0.0024), 0.316: (-16.0,0.0023), 0.2937: (-17.0,0.0022), 0.272: (-18.0,0.0021),
+		0.2501: (-19.0,0.0019), 0.232: (-20.0,0.0019), 0.212: (-21.0,0.0017), 0.195: (-22.0,0.0017), 0.178: (-23.0,0.0015), 0.163: (-24.0,0.00145),
+		0.149: (-25.0,0.00135), 0.135: (-26.0,0.00115), 0.123: (-27.0,0.00115), 0.112: (-28.0,0.00105), 0.101: (-29.0,0.00095), 0.092: (-30.0,0.00091),
+		0.083: (-31.0,0.0008), 0.075: (-32.0,0.000775), 0.0675: (-33.0,0.000658), 0.0606: (-34.0,0.0006), 0.0544: (-35.0,0.00053), 0.0489: (-36.0,0.0005),
+		0.0439: (-37.0,0.00045), 0.0395: (-38.0,0.0004), 0.0355: (-39.0,0.00038), 0.03175: (-40.0,0.00034), 0.0286: (-41.0,0.00031), 0.0254: (-42.0,0.000265),
+		0.0228: (-43.0,0.00025), 0.0203: (-44.0,0.00021), 0.0182: (-45.0,0.00018), 0.0164: (-46.0,0.00018), 0.01457: (-47.0,0.000156), 0.013: (-48.0,0.00014),
+		0.0116: (-49.0,0.000125), 0.0104: (-50.0,0.00011), 0.00925: (-51.0,0.0001), 0.00825: (-52.0,0.000088), 0.00735: (-53.0,0.000076), 0.00655: (-54.0,0.000066),
+		0.00585: (-55.0,0.00006), 0.00522: (-56.0,0.0000545), 0.00468: (-57.0,0.000051), 0.0042: (-58.0,0.000046), 0.0037: (-59.0,0.000037), 0.0033: (-60.0,0.000035),
+		0.00295: (-61.0,0.000034), 0.00265: (-62.0,0.00003), 0.0023: (-63.0,0.000022), 0.00205: (-64.0,0.000018), 0.0019: (-65.0,0.000021), 0.00165: (-66.0,0.000019),
+		0.00145: (-67.0,0.00001), 0.0013: (-68.0,0.00001),  0.0012: (-69.0,0.000015)}
+		self.end_table = {0.001: -70.5, 0.00095: -71.0, 0.0009: -71.6, 0.0008: -72.3, 0.00075: -73.0, 0.0007: -73.7, 0.00065: -74.5, 0.00055: -75.5,
+		0.0005: -76.5, 0.00045: -77.6, 0.0004: -79.0, 0.0003: -80.6, 0.00025: -82.5, 0.0002: -85.0, 0.00015: -88.5, 0.00009: -94.5, 0.0: -100.0}
 		if getVersion() >= 13: self.pickup = True
 		else: self.pickup = False
 
@@ -555,6 +616,129 @@ class Kontrol:
 		if self.pickup: setTrackVolume(track,volume,2)
 		else: setTrackVolume(track,volume)
 		if track > 0: self.faderknob[0] = time()
+		if config.RangeRectTimer > 0: self.hl_timecheck = time()
+
+
+	def multi_fader(self,fader,val):
+	#	This takes the input from one slider and adjusts the volume on all the selected tracks
+		lockedfader = self.faderlock_handler(fader)
+		volume = val / 127 - 0.003
+		db = self.to_db
+		fl = self.to_fl
+
+		if fader == lockedfader:
+			tracks = self.selectedtracks.items()
+			selected = sorted(tracks, key=lambda item: item[1], reverse=self.mixdiff)
+			firsttrack = selected[0][0]
+			firstvol = selected[0][1]
+			absolutevol = getTrackVolume(firsttrack)
+			relativevol = absolutevol
+
+			for track,trackvol in selected:
+				dbdiff = round(db(firstvol),2) - round(db(trackvol),3)
+				if self.volume:
+					voldiff = self.volume - volume
+					newvolume = round(relativevol - voldiff,3)
+					diffvolume = fl(db(newvolume) - dbdiff)
+					if trackvol == firstvol:
+						diffvolume = round(absolutevol - voldiff,3)
+					setTrackVolume(track,diffvolume)
+			self.volume = volume
+
+
+	def to_db(self,volume):
+	#	Converts volume from float to decibel
+		if volume > 1.0: volume = 1.0
+		if type(volume) == float:
+			if volume >= 0.00102:
+				vol = [key for key in self.volume_table.keys() if key >= volume][-1]
+				dist = self.volume_table[vol][1]
+				decimals = {vol: 0.0, vol-1*dist: 0.1, vol-2*dist: 0.2, vol-3*dist: 0.3, vol-4*dist: 0.4,
+							vol-5*dist: 0.5, vol-6*dist: 0.6, vol-7*dist: 0.7, vol-8*dist: 0.8, vol-9*dist: 0.9}
+				closest = min(decimals.keys(), key = lambda key: abs(key-volume))
+				db = self.volume_table[vol][0]
+				return db-decimals[closest]
+			elif volume < 0.00102:
+				closest = min(self.end_table.keys(), key = lambda key: abs(key-volume))
+				return self.end_table[closest]
+
+
+	def to_fl(self,db):
+	#	Converts volume from decibel to float
+		if db > 5.6: db = 5.6
+		if type(db) == float or type(db) == int:
+			if db >= -69.9:
+				voldata = [item for item in self.volume_table.items() if item[1][0] >= db][-1]
+				vol = voldata[0] ; voldb = voldata[1][0] ; dist = voldata[1][1]
+				return vol - round(voldb-db,1) * 10 * dist
+			elif db <= -70.0:
+				closest = min(self.end_table.values(), key = lambda value: abs(value-db))
+				end_table = {v: k for k, v in self.end_table.items()}
+				return end_table[closest]
+
+
+	def faderlock_handler(self,fader):
+	#	Gives the currently used slider exclusive control of the selected tracks while it's being used
+		faderlock = self.faderlock
+		if time() - faderlock[1] > 0.3:
+			self.faderlock = [fader,time()]
+			self.volume = None
+		elif fader == faderlock[0]:
+			self.faderlock[1] = time()
+		return self.faderlock[0]
+
+
+	def selected_tracks(self,update=False):
+	#	Returns a tuple of all the selected tracks in the mixer
+		tracklist = ()
+		selectedtracks = {}
+		for track in range(126):
+			if isTrackSelected(track):
+				tracklist += (track,)
+		for track in tracklist:
+			selectedtracks[track] = getTrackVolume(track)
+		if len(selectedtracks) != len(self.selectedtracks) or update:
+			self.selectedtracks = selectedtracks
+
+
+	def preserve_mixdiff(self,event):
+	#	Enables/disables "PreserveMixDiff" for the SET button depending on the config option
+		if len(self.selectedtracks) > 1 and event.data1 == self.markers[0]:
+			if not config.PreserveMixDiff:
+				if event.data2 == 127: self.mixdiff = True
+				else: self.mixdiff = False
+			else:
+				if event.data2 == 127: self.mixdiff = False
+				else: self.mixdiff = True
+
+
+	def vol_ftune(self,button):
+	#	This controls the fine-tuning of the selected mixer track/tracks
+		selected = self.selectedtracks
+
+		def apply_vol(track):
+			trackvol = getTrackVolume(track)
+			if trackvol >= 0.00102:
+				vol = [key for key in self.volume_table.keys() if key >= trackvol][-1]
+				dist = self.volume_table[vol][1]
+			if button == self.track_select[0]:
+				newvol = trackvol - dist * 1
+				return newvol
+			elif button == self.track_select[1]:
+				newvol = trackvol + dist * 1
+				return newvol
+
+		if len(selected) == 1:
+			track = trackNumber()
+			newvol = apply_vol(track)
+			setTrackVolume(track,newvol)
+			self.ftune = True
+		elif len(selected) > 1:
+			for track in selected:
+				newvol = apply_vol(track)
+				setTrackVolume(track,newvol)
+			self.selected_tracks(True)
+			self.ftune = True
 
 
 	def func_knob(self,knob,val,pan=True):
@@ -574,6 +758,7 @@ class Kontrol:
 		if self.pickup: setFunc(track,pan,2)
 		else: setFunc(track,pan)
 		if track > 0: self.faderknob[0] = time()
+		if config.RangeRectTimer > 0: self.hl_timecheck = time()
 
 
 	def set_transport(self,event):
@@ -637,6 +822,32 @@ class Kontrol:
 		elif isPlaying() and isRecording(): blink(4)
 
 
+	def mode_blink(self,reset=False):
+	#	Flashes the transport buttons to indicate the currently active mode
+		light = self.transp_btns
+		cc = MIDI_CONTROLCHANGE
+		chan = config.TransportChan -1
+		modes = self.get_modes(0)
+		current = self.current_mode
+
+		if len(modes) > 1:
+			lights = modes.index(current) + 1
+		else: return
+
+		if reset:
+			for l in range(lights):
+				midiOutMsg(cc,chan,light[l],0)
+			return
+
+		for l in range(lights):
+			if self.mode_blinks % 2:	# Check if mode_blinks is even
+				midiOutMsg(cc,chan,light[l],127)
+			else:
+				midiOutMsg(cc,chan,light[l],0)
+		if self.mode_blinks == 14: self.mode_blinks = 0
+		else: self.mode_blinks += 1
+
+
 	def set_mixer_range(self,start):
 	#	This generate lists of which tracks are currently controlled
 		mixdict = {}		
@@ -655,13 +866,13 @@ class Kontrol:
 		self.smr_tracks = mixdict
 
 
-	def sel_mixer(self,direction):
+	def sel_mixer(self,button):
 	#	This takes input from the track-buttons and use it to select tracks
 		mixer_range = self.mixer_range
 		master = config.StickyMaster
 		move = None
-		if direction == 0: move = -1
-		elif direction == 1: move = 1
+		if button == 0: move = -1
+		elif button == 1: move = 1
 		if not move: return
 		selected = trackNumber()
 
@@ -698,7 +909,11 @@ class Kontrol:
 
 		if not state:
 			miDisplayRect(start,end,MaxInt,2)
-		else: miDisplayRect(start,end,0)
+			self.midisplayrect = True
+			if config.RangeRectTimer > 0: self.hl_timecheck = time()
+		else:
+			miDisplayRect(start,end,0)
+			self.midisplayrect = False
 
 
 	def set_range_color(self,state=None):
@@ -828,7 +1043,7 @@ class Kontrol:
 		if master: track = mixer_range[1]
 		else: track = mixer_range[0]
 
-		if event.data1 == markers[0]:	# Set-button
+		if event.data1 == markers[0] and len(self.selectedtracks) == 1:	# Set-button
 			track = trackNumber()
 			if master and track < 1 or track > 119: return	# Prevent the track-range from being moved too far
 			elif not master and track > 118: return
@@ -1103,23 +1318,28 @@ class Kontrol:
 		self.lastknob = knobval
 
 
-	def repeat_handler(self,delay,repeat,function):
+	def repeat_handler(self):
 	# 	Handles the repeat-event when a button is held down
 		current_time = time()
-		repeat_event = self.repeat_event
+		repeat_events = self.repeat_events
 		
-		for button in self.repeat_event:
-			press_time = repeat_event[button][0]
-			last_repeat = repeat_event[button][1]
-			if current_time - press_time > delay:
-				if current_time - last_repeat > repeat:
+		for button in repeat_events:
+			repeat_event = repeat_events[button]
+			press_time = repeat_event[0]
+			last_repeat = repeat_event[1]
+			delay_time = repeat_event[2]
+			repeat_time = repeat_event[3]
+			function = repeat_event[4]
+			if current_time - press_time > delay_time:
+				if current_time - last_repeat > repeat_time:
 					function(button)
-					self.repeat_event[button] = (press_time,time())
+					repeat_event[1] = time()
+					self.repeat_events[button] = repeat_event
 
 	
-	def set_repeat_event(self,button):
+	def set_repeat_event(self,button,delay_time,repeat_time,function):
 	# 	Registers that a button needs to be repeated
-		self.repeat_event[button] = (time(),0)
+		self.repeat_events[button] = [time(),0,delay_time,repeat_time,function]
 
 
 	def faderknob_focus(self):
@@ -1127,9 +1347,13 @@ class Kontrol:
 		if config.StickyMaster: t = 1
 		else: t = 0
 		selected = trackNumber()
-		setTrackNumber(self.mixer_range[t],1)
-		setTrackNumber(self.mixer_range[7],1)
-		setTrackNumber(selected)
+		if getVersion() >= 13:
+			scrollWindow(0,self.mixer_range[t])
+			scrollWindow(0,self.mixer_range[7])
+		else:
+			setTrackNumber(self.mixer_range[t],1)
+			setTrackNumber(self.mixer_range[7],1)
+			setTrackNumber(selected)
 
 
 	def handle_markers(self,button):
@@ -1227,7 +1451,8 @@ class Kontrol:
 
 
 	def control_not_linked(self,cc):
-		try:	# findEventID lacks proper documentation in the API. Let's put a try/except just in case.
+	# Checks to see if the cc is currently linked in FL Studio
+		try:	# EncodeRemoteControlID lacks proper documentation in the API. Let's put a try/except just in case.
 			id = findEventID(EncodeRemoteControlID(getPortNumber(), 0, 0) + cc, 1)
 			val = getLinkedValue(id)
 			if val == -1: return True
@@ -1241,13 +1466,20 @@ def InitConfig():
 	# Missing config options will be initiated with their default values.
 	global config
 	config = None
-	options = {	'MIDIChannel': 1, 'TransportChan': 14, 'SleepTimer': 5, 'HighlightColor': -11835046, 'MixerMode': True, 'ChannelrackMode': True,
-				'PlaylistMode': True, 'ControllerLinkMode': False, 'PlayBlinkTempo': True, 'PeakMeter': True, 'PlayingOnly': False, 'ReversePeak': False,
-				'BigMeter': False, 'Clipping': True, 'SelectedPeak': False, 'ArmedTracks': False, 'ExclusiveSelect': True, 'TrackRangeOnly': False,
-				'StickyMaster': False, 'RangeDisplayRect': True, 'ColoredRange': True, 'BracketedRange': True, 'TempoBase': 80	}
-	boolparams = ['PeakMeter','ReversePeak','BigMeter','Clipping','PlayingOnly','ArmedTracks','ExclusiveSelect','TrackRangeOnly','StickyMaster','ColoredRange',
-				'BracketedRange','SelectedPeak','MixerMode','ChannelrackMode','PlaylistMode','ControllerLinkMode','PlayBlinkTempo','RangeDisplayRect']
-	numparams = {'MIDIChannel': (1,16), 'TransportChan': (1,16),'SleepTimer': (0,300),'HighlightColor': (-15461356,-1),'TempoBase':(10,397)}
+	options = {
+		'MIDIChannel': 1, 'TransportChan': 14, 'SleepTimer': 5, 'HighlightColor': -11835046, 'MixerMode': True, 'ChannelrackMode': True,
+		'PlaylistMode': True, 'ControllerLinkMode': False, 'PlayBlinkTempo': True, 'PeakMeter': True, 'PlayingOnly': False, 'ReversePeak': False,
+		'BigMeter': False, 'Clipping': True, 'SelectedPeak': False, 'ArmedTracks': False, 'MultiSelect': False, 'TrackRangeOnly': False,
+		'StickyMaster': False, 'RangeDisplayRect': True, 'ColoredRange': True, 'BracketedRange': False, 'TempoBase': 80, 'PreserveMixDiff': False,
+		'BlinkFullTempo': False, 'RangeRectTimer': 0, 'ModeBlink': True,
+		}
+	numparams = {
+		'MIDIChannel': (1,16), 'TransportChan': (1,16),'SleepTimer': (0,300),'HighlightColor': (-15461356,-1),'TempoBase':(10,397), 'RangeRectTimer': (0,10),
+		'MIDIChannel_Unit2': (1,16),'TransportChan_Unit2': (1,16),'Port_Unit2': (0,255),
+		'MIDIChannel_Unit3': (1,16),'TransportChan_Unit3': (1,16),'Port_Unit3': (0,255),
+		'MIDIChannel_Unit4': (1,16),'TransportChan_Unit4': (1,16),'Port_Unit4': (0,255)
+		}
+	boolparams = options.keys() - numparams.keys()
 
 	try: import config
 	except Exception as e: print('nanometer config: ' + str(e) +'.')
@@ -1259,7 +1491,6 @@ def InitConfig():
 
 		for param in options:	# Use default values for everything
 			setattr(config,param,options[param])
-
 	else:
 		missing = []
 		for param in boolparams:	# Check if boolean options are set correctly
@@ -1284,15 +1515,31 @@ def InitConfig():
 				setattr(config,param,options[param])
 				missing.append(param)
 
+		if 'MultiSelect' in missing:
+			if hasattr(config,'ExclusiveSelect'):	# If present, use the deprecated 'ExclusiveSelect'
+				value = getattr(config,'ExclusiveSelect')
+				if type(value) is bool:
+					setattr(config,'MultiSelect',not value)	# Set 'MultiSelect' to the opposite value of 'ExclusiveSelect'
+					missing.remove('MultiSelect')
+
 		if missing: print('nanometer config: using default value for ' +', '.join(missing) +'.')
 		else: print('nanometer config: imported ok.')
+
+	# Check the config for additional units and set them up accordingly
+	for u in range(2,5):
+		m_bool = hasattr(config,'MIDIChannel_Unit'+str(u))
+		t_bool = hasattr(config,'TransportChan_Unit'+str(u))
+		p_bool = hasattr(config,'Port_Unit'+str(u))
+		if m_bool & t_bool & p_bool:
+			if getPortNumber() == getattr(config,'Port_Unit'+str(u)):
+				config.MIDIChannel = getattr(config,'MIDIChannel_Unit'+str(u))
+				config.TransportChan = getattr(config,'TransportChan_Unit'+str(u))
 
 	# Make some final adjustments
 	if not hasattr(config,'Debug'): config.Debug = False
 	if hasattr(config,'RangeDisplayRect') and config.RangeDisplayRect == True:
 		if getVersion() >= 17:
 			config.ColoredRange = False
-			config.BracketedRange = False
 		else:
 			print('nanometer: RangeDisplayRect option requires a newer version of FL Studio.')
 			config.RangeDisplayRect = False

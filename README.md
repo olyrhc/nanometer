@@ -15,6 +15,8 @@ It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later t
 * Enters pause-mode lightshow when idle
 * Has many configurable options
 * Gives you full control of all 125 mixer tracks
+* Can control the volume of multiple selected tracks with one slider
+* Can change the volume of selected tracks in increments of 0.1dB
 * Mixertracks are highlighted
 * Solo/Mute buttons with status-lights
 * Supports pickup mode for the mixer controls (requires FL Studio 20.9+)
@@ -28,5 +30,6 @@ It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later t
 * Adjust the horizontal/vertical zooming of the playlist
 * Adjust the current tempo
 * Has support for controller linking of buttons, faders and knobs
+* Has support for up to 4 nanoKontrol2 units connected simultaneously
 
 #### Please refer to the [wiki](https://github.com/olyrhc/nanometer/wiki) for more details

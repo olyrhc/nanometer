@@ -1,5 +1,6 @@
 ### nanometer configfile
-
+## Note: True and False must always begin with a capital letter!
+ 
 # General settings
 
 MIDIChannel = 1
@@ -15,8 +16,16 @@ SleepTimer  = 5
 #	Value can be between 0 (lightshow is disabled) to 300.
 
 PlayBlinkTempo = True
-#   True will make the Play button flash in sync with the tempo when playing.
+#   True (Default) will make the Play button flash in sync with the tempo when playing.
 #   False will instead make the Record button flash in tempo sync during recording.
+
+BlinkFullTempo = False
+#	True will make the Play (or Record) button flash on full-tempo beat.
+#	False (Default) will make the Play (or Record) button flash on half-tempo beat.
+
+ModeBlink = True
+#	True (Default) causes the transport-buttons to flash rapidly to indicate the
+#	active mode when Cycle is pressed. False disables the flashing effect.
 
 MixerMode = True
 #	True (Default) enables the Mixer mode.
@@ -66,9 +75,9 @@ ArmedTracks = False
 #	If set to True, the R-buttons will be used for arming tracks.
 #	False (Default) will use the R-buttons for selecting tracks instead.
 
-ExclusiveSelect = True
-#	If set to True (Default), the R-buttons will select each track exclusivly.
-#	False means that multiple tracks can be selected.
+MultiSelect = False
+#	If set to True, the R-buttons can be used to select multiple tracks.
+#	False (Default) means that each track will be selected exclusively.
 
 TrackRangeOnly = False
 #	If set to True, the Track-buttons will only select tracks within the current range.
@@ -82,6 +91,10 @@ RangeDisplayRect = True
 #   If set to True (Default), the mixer tracks controlled by the nanoKONTROL will be
 #   marked by a red rectangle. To use the ColoredRange option, this must be set to False.
 
+RangeRectTimer = 0
+# The number of seconds before the RangeRectDisplay rectangle is hidden.
+# Value can be between 0 (Rectangle is always on) to 10.
+
 ColoredRange = True
 #	If set to True (Default), the mixer tracks controlled by the nanoKONTROL will be
 #	colored by the script. False disables the coloring.
@@ -90,9 +103,13 @@ HighlightColor = -11835046
 #	The color used for the marked mixer tracks.
 #	The value is in RGBA format. Please read the documentation for more info.
 
-BracketedRange = True
-#	If set to True (Default), the mixer tracks controlled by the nanoKONTROL will
-#	have brackets added to their names. False will leave the names untouched.
+BracketedRange = False
+#	If set to True, the mixer tracks controlled by the nanoKONTROL will
+#	have brackets added to their names. False (Default) will leave the names untouched.
+
+PreserveMixDiff = False
+#   If set to True, the faders of the selected tracks will stop when one of the faders
+#   reach +5.6dB. False (Default) means all the faders can be raised to +5.6dB.
 
 # Playlist settings
 
