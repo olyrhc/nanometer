@@ -13,7 +13,7 @@ from time import time
 
 
 def OnInit():
-	print("*** nanometer script v1.3 by Robin Calvin (olyrhc) ***")
+	print("*** nanometer script v1.3.1 by Robin Calvin (olyrhc) ***")
 	global nm
 	global kn
 	InitConfig()
@@ -101,12 +101,13 @@ def OnControlChange(event):
 			if kn.shift:
 				if mode == 0: kn.split_master(button)
 				if mode == 2: kn.handle_markers(button)
-			elif button == 3:
-				kn.preserve_mixdiff(event)
-				kn.set_held = True
 			else:
 				if mode == 0:
-					kn.move_range(event)
+					if button == 3:
+						kn.preserve_mixdiff(event)
+						kn.set_held = True
+					else:
+						kn.move_range(event)
 				elif mode == 1:
 					kn.set_channel(button)
 					kn.set_repeat_event(button,0.4,0.15,kn.set_channel)
@@ -128,12 +129,13 @@ def OnControlChange(event):
 		kn.active[1] = True
 	
 		if button in track_select + markers:	# Track-select release
-			if button == 3:
-				kn.set_held = False
-				kn.preserve_mixdiff(event)
-				if not kn.ftune: kn.move_range(event)
-				kn.ftune = False
-			elif not kn.shift:
+			if mode == 0:
+				if button == 3:
+					kn.set_held = False
+					kn.preserve_mixdiff(event)
+					if not kn.ftune: kn.move_range(event)
+					kn.ftune = False
+			if not kn.shift:
 				if button in kn.repeat_events.keys(): del kn.repeat_events[button]
 			
 		elif button in transp_btns:	# Transport button release
@@ -1322,7 +1324,7 @@ class Kontrol:
 	# 	Handles the repeat-event when a button is held down
 		current_time = time()
 		repeat_events = self.repeat_events
-		
+
 		for button in repeat_events:
 			repeat_event = repeat_events[button]
 			press_time = repeat_event[0]
@@ -1339,7 +1341,8 @@ class Kontrol:
 	
 	def set_repeat_event(self,button,delay_time,repeat_time,function):
 	# 	Registers that a button needs to be repeated
-		self.repeat_events[button] = [time(),0,delay_time,repeat_time,function]
+		if button != self.markers[0]:
+			self.repeat_events[button] = [time(),0,delay_time,repeat_time,function]
 
 
 	def faderknob_focus(self):
