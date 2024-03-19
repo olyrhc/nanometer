@@ -27,22 +27,6 @@ ModeBlink = True
 #	True (Default) causes the transport-buttons to flash rapidly to indicate the
 #	active mode when Cycle is pressed. False disables the flashing effect.
 
-MixerMode = True
-#	True (Default) enables the Mixer mode.
-#	False disables the Mixer mode.
-
-ChannelrackMode = True
-#	True (Default) enables the Channel rack mode.
-#	False disables the Channel rack mode.
-
-PlaylistMode = True
-#	True (Default) enables the Playlist mode.
-#	False disables the Playlist mode.
-
-ControllerLinkMode = False
-#   True enables the Controller Link mode.
-#   False (Default) disables the Controller Link mode.
-
 # PeakMeter settings
 
 PeakMeter = True
@@ -70,6 +54,10 @@ SelectedPeak = False
 #	If set to False (Default), it will show the peaks for the master track.
 
 # Mixer settings
+
+MixerMode = True
+#	True (Default) enables the Mixer mode.
+#	False disables the Mixer mode.
 
 ArmedTracks = False
 #	If set to True, the R-buttons will be used for arming tracks.
@@ -111,8 +99,36 @@ PreserveMixDiff = False
 #   If set to True, the faders of the selected tracks will stop when one of the faders
 #   reach +5.6dB. False (Default) means all the faders can be raised to +5.6dB.
 
+# Channel rack settings
+
+ChannelrackMode = True
+#	True (Default) enables the Channel rack mode.
+#	False disables the Channel rack mode.
+
+ChannelRectCtrl = False
+#	If set to True, the channel rectangle will be enabled when the script starts.
+#	Otherwise, it will be disabled until the user enables it with the TRACK LEFT button.
+
 # Playlist settings
+
+PlaylistMode = True
+#	True (Default) enables the Playlist mode.
+#	False disables the Playlist mode.
 
 TempoBase = 80
 #	This sets the min (bottom)-value of the tempo-knob in the Playlist control mode.
 #	The value can be between 10 and 397.
+
+# Controller Link settings
+
+ControllerLinkMode = False
+#   True enables the Controller Link mode.
+#   False (Default) disables the Controller Link mode.
+
+LinkOverriding = False
+#	If set to True, control linking can be done directly from all modes without
+#	holding the Cycle button. This WILL override regular functions. USE CAREFULLY!
+
+TranspBtnLink = False
+#	If set True, the transport buttons can be linked, but in doing so, the
+#	regular transport functions might not work. Use carefully!

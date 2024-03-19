@@ -15,15 +15,17 @@ It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later t
 * Enters pause-mode lightshow when idle
 * Has many configurable options
 * Gives you full control of all 125 mixer tracks
-* Can control the volume of multiple selected tracks with one slider
-* Can change the volume of selected tracks in increments of 0.1dB
 * Mixertracks are highlighted
+* Control the volume of multiple selected tracks with one slider
+* Finetune the volume of tracks in increments of 0.1dB
 * Solo/Mute buttons with status-lights
 * Supports pickup mode for the mixer controls (requires FL Studio 20.9+)
-* Selection of the active channel
+* Control channels individually (by selection) or in groups (highlighted)
+* Change panning and volume of channels
 * Solo/Mute the active channel
 * Set the mixer track target for the active channel
-* Toggle plugin-windows on/off
+* Change the pitch of channels
+* Toggle plugin/sampler/automation-windows on/off
 * Toggle the pianoroll on/off
 * Select patterns
 * Create time-markers and jump between them
