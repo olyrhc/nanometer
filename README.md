@@ -26,7 +26,7 @@ It requires a KORG nanoKONTROL2 MIDI-controller and FL Studio v20.7.3 or later t
 * Set the mixer track target for the active channel easily
 * Adjust the pitch of channels with ease from your controller
 * Toggle plugin, sampler, and automation windows on or off
-* Toggle the piano roll window on or off for quick acces
+* Toggle the piano roll window on or off for quick access
 * Select patterns quickly for efficient arrangement
 * Create time-markers and jump between them with ease
 * Adjust horizontal and vertical zoom levels in the playlist
